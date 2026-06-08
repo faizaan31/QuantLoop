@@ -1,0 +1,90 @@
+"""
+Simple example demonstrating QuantLoop usage.
+"""
+
+# Create sample data with clear trend
+import math
+
+import polars as pl
+
+from quantloop import Strategy, backtest, optimize, param
+from quantloop import indicators as ind
+from quantloop.core import BacktestContext
+
+data = pl.DataFrame(
+    {
+        "timestamp": range(100),
+        "close": [100 + i * 0.5 + 10 * math.sin(i / 5) for i in range(100)],
+    }
+)
+
+
+# Define a simple moving average crossover strategy
+class SMACrossStrategy(Strategy):
+    fast_period = param(10)
+    slow_period = param(20)
+
+    def preprocess(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Calculate moving averages and crossover signals using vectorized Polars operations."""
+
+        return df.with_columns(
+            [
+                ind.sma("close", self.fast_period).alias("sma_fast"),
+                ind.sma("close", self.slow_period).alias("sma_slow"),
+            ]
+        ).with_columns(
+            [
+                ind.crossover("sma_fast", "sma_slow").alias("golden_cross"),
+                ind.crossunder("sma_fast", "sma_slow").alias("death_cross"),
+            ]
+        )
+
+    def next(self, ctx: BacktestContext) -> None:
+        """Execute strategy logic on each bar."""
+        # Golden cross: go long
+        if ctx.row.get("golden_cross"):
+            ctx.portfolio.order_target_percent("asset", 0.95)
+        # Death cross: close position
+        elif ctx.row.get("death_cross"):
+            ctx.portfolio.close_position("asset")
+
+
+if __name__ == "__main__":
+    print("Running QuantLoop Example\n" + "=" * 50)
+
+    # Run single backtest
+    results = backtest(
+        SMACrossStrategy,
+        data,
+        params={"fast_period": 10, "slow_period": 20},
+        initial_cash=100_000,
+    )
+
+    print("\nBacktest Results:")
+    print(f"  Total Return:    {results.total_return:.2%}")
+    print(f"  Sharpe Ratio:    {results.sharpe_ratio:.2f}")
+    print(f"  Max Drawdown:    {results.max_drawdown:.2%}")
+    print(f"  Final Equity:    ${results.final_equity:,.2f}")
+    print(f"  Trades:          {results.trade_stats.total_trades}")
+
+    # Run optimization with constraint to skip nonsensical parameter combos
+    param_grid = {"fast_period": [5, 10, 15], "slow_period": [10, 20, 30]}
+
+    best = optimize(
+        SMACrossStrategy,
+        data,
+        param_grid=param_grid,
+        objective="sharpe_ratio",
+        constraint=lambda p: p["fast_period"] < p["slow_period"],
+        initial_cash=100_000,
+        n_jobs=1,
+        verbose=True,
+    )
+
+    print("\nOptimization Results:")
+    print(f"  Best fast_period: {best.params['fast_period']}")
+    print(f"  Best slow_period: {best.params['slow_period']}")
+    print(f"  Sharpe Ratio:     {best.metrics.sharpe_ratio:.3f}")
+
+    print("\n" + "=" * 50)
+    print("Example completed successfully!")

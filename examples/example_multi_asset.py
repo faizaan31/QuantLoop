@@ -1,0 +1,98 @@
+"""
+Example demonstrating multi-asset strategy with features:
+- Multiple dataframes passed as dict
+- Automatic warmup period (default)
+- Order delay for realistic execution
+- Long-format preprocess with .over("symbol")
+- ctx.row("SYMBOL") access pattern
+"""
+
+# Create sample data for multiple assets with distinct trend regimes.
+# BTC: strong uptrend; ETH: sideways then up — momentum rotation picks the leader.
+import math
+
+import polars as pl
+
+from quantloop import Strategy, backtest, param
+from quantloop import indicators as ind
+from quantloop.core import BacktestContext
+
+btc_data = pl.DataFrame(
+    {
+        "date": range(200),
+        "close": [40000 + i * 80 + 500 * math.sin(i / 15) for i in range(200)],
+    }
+)
+
+eth_data = pl.DataFrame(
+    {
+        "date": range(200),
+        "close": [
+            2500 - i * 2 + 300 * math.sin(i / 12) if i < 100 else 2300 + (i - 100) * 20 + 300 * math.sin(i / 12)
+            for i in range(200)
+        ],
+    }
+)
+
+
+# Define a momentum-based portfolio strategy
+class MomentumPortfolio(Strategy):
+    lookback = param(20)
+
+    def preprocess(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Calculate momentum indicators for all assets using .over('symbol')."""
+        return df.with_columns(
+            ind.returns("close", self.lookback).over("symbol").alias("momentum"),
+        )
+
+    def next(self, ctx: BacktestContext) -> None:
+        """Allocate to asset with strongest momentum."""
+        btc_mom = ctx.row("BTC").get("momentum")
+        eth_mom = ctx.row("ETH").get("momentum")
+
+        # Allocate 100% to strongest momentum asset
+        if btc_mom is None or eth_mom is None:
+            return
+
+        if btc_mom > eth_mom:
+            ctx.portfolio.order_target_percent("BTC", 0.95)
+            ctx.portfolio.order_target_percent("ETH", 0.0)
+        else:
+            ctx.portfolio.order_target_percent("BTC", 0.0)
+            ctx.portfolio.order_target_percent("ETH", 0.95)
+
+
+if __name__ == "__main__":
+    print("Multi-Asset Strategy Example")
+    print("=" * 60)
+
+    # Run backtest with dict of dataframes
+    results = backtest(
+        MomentumPortfolio,
+        data={
+            "BTC": btc_data,
+            "ETH": eth_data,
+        },
+        params={"lookback": 20},
+        initial_cash=100_000,
+        # warmup="auto" is the default - automatically skips bars until all indicators are ready
+        order_delay=1,  # Orders execute next bar (more realistic)
+    )
+
+    print("\nBacktest Results:")
+    if results.success is not False:
+        print(f"  Total Return:     {results.total_return:.2%}")
+        print(f"  Sharpe Ratio:     {results.sharpe_ratio:.2f}")
+        print(f"  Max Drawdown:     {results.max_drawdown:.2%}")
+        print(f"  Final Equity:     ${results.final_equity:,.2f}")
+        print(f"  Win Rate:         {results.win_rate:.2%}")
+        print("\n  Final Positions:")
+        for asset, qty in results.final_positions.items():
+            print(f"    {asset}: {qty:.6f}")
+    else:
+        print(f"  ERROR: {results.error or 'Unknown error'}")
+        if results.traceback:
+            print(f"\n{results.traceback}")
+
+    print("\n" + "=" * 60)
+    print("Example completed successfully!")
