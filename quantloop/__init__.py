@@ -39,7 +39,14 @@ from quantloop.core import (
 )
 from quantloop.orders import Order, OrderStatus, OrderType
 from quantloop.results import BacktestMetrics, OptimizeResult, TradeStats
-from quantloop.runner import backtest, backtest_batch, optimize, optimize_bayesian, optimize_multi, walk_forward_analysis
+from quantloop.runner import (
+    backtest,
+    backtest_batch,
+    optimize,
+    optimize_bayesian,
+    optimize_multi,
+    walk_forward_analysis,
+)
 from quantloop.sizers import (
     FixedRiskSizer,
     FixedSizer,

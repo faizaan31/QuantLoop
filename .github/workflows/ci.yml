@@ -21,9 +21,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: |
-          pip install -e ".[dev]"
-          pip install pyarrow
+        run: pip install -e ".[dev]"
 
       - name: Ruff
         run: ruff check quantloop tests
