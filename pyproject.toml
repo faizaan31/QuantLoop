@@ -96,6 +96,10 @@ ignore_missing_imports = true
 module = "talib.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "skopt.*"
+ignore_missing_imports = true
+
 
 
 [tool.pytest.ini_options]

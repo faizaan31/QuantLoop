@@ -6,10 +6,22 @@ All metrics are calculated using vectorized Polars operations for maximum perfor
 
 from __future__ import annotations
 
+from numbers import Real
 from typing import Any
 
 import numpy as np
 import polars as pl
+
+
+def _scalar_float(value: object | None, default: float = 0.0) -> float:
+    """Coerce a Polars scalar or numeric value to float."""
+    if value is None:
+        return default
+    if isinstance(value, Real):
+        return float(value)
+    if isinstance(value, (str, bytes)):
+        return float(value)
+    return default
 
 
 def calculate_metrics(equity_df: pl.DataFrame, initial_capital: float) -> dict[str, Any]:
@@ -84,8 +96,8 @@ def calculate_metrics(equity_df: pl.DataFrame, initial_capital: float) -> dict[s
 
     total_wins_val = positive_returns.sum() if len(positive_returns) > 0 else 0.0
     total_losses_val = negative_returns.sum() if len(negative_returns) > 0 else 0.0
-    total_wins = float(total_wins_val) if total_wins_val is not None else 0.0
-    total_losses = float(abs(total_losses_val)) if total_losses_val is not None else 0.0
+    total_wins = _scalar_float(total_wins_val)
+    total_losses = abs(_scalar_float(total_losses_val))
 
     profit_factor = total_wins / total_losses if total_losses > 0 else float("inf") if total_wins > 0 else 0.0
 
@@ -245,9 +257,11 @@ def omega_ratio(equity_df: pl.DataFrame, threshold: float = 0.0) -> float:
     total_gains = gains.sum() if len(gains) > 0 else 0.0
     total_losses = losses.sum() if len(losses) > 0 else 0.0
 
-    if total_losses > 0:
-        return float(total_gains / total_losses)
-    return float("inf") if total_gains > 0 else 0.0
+    gains_f = _scalar_float(total_gains)
+    losses_f = _scalar_float(total_losses)
+    if losses_f > 0:
+        return gains_f / losses_f
+    return float("inf") if gains_f > 0 else 0.0
 
 
 def rolling_sharpe(equity_df: pl.DataFrame, window: int = 252) -> pl.DataFrame:
@@ -310,7 +324,7 @@ def value_at_risk(equity_df: pl.DataFrame, confidence: float = 0.95) -> float:
         return 0.0
 
     quantile_val = returns.quantile(1 - confidence)
-    var = abs(float(quantile_val)) if quantile_val is not None else 0.0  # type: ignore[arg-type]
+    var = abs(_scalar_float(quantile_val))
     return var
 
 
@@ -388,10 +402,11 @@ def tail_ratio(equity_df: pl.DataFrame, confidence: float = 0.95) -> float:
     if left_tail is None or right_tail is None:
         return 0.0
 
-    left_val = abs(float(left_tail))  # type: ignore[arg-type]
+    left_val = abs(_scalar_float(left_tail))
+    right_val = _scalar_float(right_tail)
     if left_val == 0:
-        return float("inf") if float(right_tail) > 0 else 0.0  # type: ignore[arg-type]
-    return float(right_tail) / left_val  # type: ignore[arg-type]
+        return float("inf") if right_val > 0 else 0.0
+    return right_val / left_val
 
 
 def information_ratio(equity_df: pl.DataFrame, benchmark_df: pl.DataFrame) -> float:
@@ -685,6 +700,6 @@ def liquidity_metrics(
         tv = data[trading_value_col].drop_nulls()
         if len(tv) > 0:
             p10 = tv.quantile(0.10)
-            result["capacity"] = float(p10) if p10 is not None else None  # type: ignore[arg-type]
+            result["capacity"] = _scalar_float(p10) if p10 is not None else None
 
     return result

@@ -14,6 +14,7 @@ from typing import Any
 
 import numpy as np
 import polars as pl
+from numpy.typing import NDArray
 
 from quantloop.commissions import CommissionModel
 from quantloop.core import Strategy
@@ -33,11 +34,11 @@ class MonteCarloResult:
         n_simulations: Number of simulations run.
     """
 
-    simulated_equities: np.ndarray
-    final_equities: np.ndarray
-    max_drawdowns: np.ndarray
+    simulated_equities: NDArray[np.float64]
+    final_equities: NDArray[np.float64]
+    max_drawdowns: NDArray[np.float64]
     confidence_intervals: dict[str, tuple[float, float]]
-    percentiles: dict[str, np.ndarray]
+    percentiles: dict[str, NDArray[np.float64]]
     initial_capital: float
     n_simulations: int
 
@@ -114,7 +115,7 @@ def monte_carlo(
     }
 
     standard_pcts = np.array([1, 5, 10, 25, 50, 75, 90, 95, 99], dtype=float)
-    percentiles: dict[str, np.ndarray] = {
+    percentiles: dict[str, NDArray[np.float64]] = {
         "final_equity": np.percentile(final_equities, standard_pcts),
         "max_drawdown": np.percentile(max_drawdowns, standard_pcts),
     }
@@ -257,7 +258,7 @@ class PermutationTestResult:
     """
 
     original_metric: float
-    null_distribution: np.ndarray
+    null_distribution: NDArray[np.float64]
     p_value: float
     mean_null: float
     std_null: float
@@ -266,7 +267,7 @@ class PermutationTestResult:
 
 def _run_permutation_worker(
     args: tuple[
-        type[Strategy], pl.DataFrame, list[str], np.ndarray, np.ndarray, dict[str, np.ndarray], int, str, dict[str, Any]
+        type[Strategy], pl.DataFrame, list[str], NDArray[np.float64], NDArray[np.float64], dict[str, NDArray[np.float64]], int, str, dict[str, Any]
     ],
 ) -> float:
     """Worker function for parallel permutation test execution.
@@ -423,9 +424,9 @@ def permutation_test(
 def _shuffle_returns(
     data: pl.DataFrame,
     price_cols: list[str],
-    base_prices: np.ndarray,
-    log_returns: np.ndarray,
-    price_arrays: dict[str, np.ndarray],
+    base_prices: NDArray[np.float64],
+    log_returns: NDArray[np.float64],
+    price_arrays: dict[str, NDArray[np.float64]],
     rng: np.random.Generator,
 ) -> pl.DataFrame:
     """Shuffle returns and reconstruct OHLCV data preserving intra-bar relationships.

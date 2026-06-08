@@ -6,6 +6,7 @@ All functions return Polars expressions that can be used in .with_columns() call
 
 import numpy as np
 import polars as pl
+from numpy.typing import NDArray
 
 
 def sma(column: str, period: int) -> pl.Expr:
@@ -326,7 +327,7 @@ def hma(column: str, period: int) -> pl.Expr:
     def _hma(s: pl.Series) -> pl.Series:
         arr = s.to_numpy().astype(np.float64)
 
-        def _calc_wma(data: np.ndarray, w: np.ndarray, ws: float, p: int) -> np.ndarray:
+        def _calc_wma(data: NDArray[np.float64], w: NDArray[np.float64], ws: float, p: int) -> NDArray[np.float64]:
             out = np.full(len(data), np.nan)
             for i in range(p - 1, len(data)):
                 window = data[i - p + 1 : i + 1]
